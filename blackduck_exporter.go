@@ -123,7 +123,13 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	}
 	e.jobs.Collect(ch)
 
+	for _, job := range jobs.Items {
+		if job.Status == "RUNNING" {
+			e.jobLastSeenRunning.WithLabelValues(job.ID).SetToCurrentTime()
+		}
+	}
 	e.jobLastSeenRunning.Collect(ch)
+
 	e.scans.Collect(ch)
 }
 
