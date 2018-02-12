@@ -87,8 +87,9 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	e.jobLastSeenRunning.Describe(ch)
 }
 
-func (e *Exporter) recover(ch chan<- prometheus.Metric) {
-	err := recover()
+// Collect : Collector implementation for Prometheus
+func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
+	err := e.collect(ch)
 	if err != nil {
 		log.Fatal(err)
 		e.scrapeFailures.Inc()
@@ -96,20 +97,18 @@ func (e *Exporter) recover(ch chan<- prometheus.Metric) {
 	}
 }
 
-// Collect : Collector implementation for Prometheus
-func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
+func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
-	defer e.recover(ch)
 
 	auth, err := getAuthTokens()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	jobs, err := getJobs(auth)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	jobStatusCounts := make(map[string]int)
 	for _, job := range jobs.Items {
@@ -131,6 +130,8 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.jobLastSeenRunning.Collect(ch)
 
 	e.scans.Collect(ch)
+
+	return nil
 }
 
 type jobJSON struct {
@@ -161,8 +162,7 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 	if err != nil {
 		return j, err
 	}
-	req.Header.Add("Cookie", fmt.Sprintf("%s=%s", auth.Cookie.Name, auth.Cookie.Value))
-	req.Header.Add("X-CSRF-TOKEN", auth.XCSRFToken)
+	req.AddCookie(auth.Cookie)
 
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -179,7 +179,7 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 		return j, err
 	}
 	if j.ErrorMessage != "" {
-		return j, errors.New(fmt.Sprintf("Problem fetching jobs: %s", j.ErrorMessage))
+		return j, fmt.Errorf("Problem fetching jobs: %s", j.ErrorMessage)
 	}
 	return j, nil
 }
@@ -192,20 +192,16 @@ func getPassword() string {
 		password = *blackduckPassword
 	}
 	if *blackduckPasswordFile != "" {
-		_, err := os.Stat(*blackduckPasswordFile)
-		if os.IsExist(err) {
-			buf, err := ioutil.ReadFile(*blackduckPasswordFile)
-			if err == nil {
-				password = strings.TrimSpace(string(buf))
-			}
+		buf, err := ioutil.ReadFile(*blackduckPasswordFile)
+		if err == nil {
+			password = strings.TrimSpace(string(buf))
 		}
 	}
 	return password
 }
 
 type authTokens struct {
-	XCSRFToken string
-	Cookie     *http.Cookie
+	Cookie *http.Cookie
 }
 
 // getCookie : Uses credentials to get cookie from BlackDuck
@@ -231,11 +227,10 @@ func getAuthTokens() (*authTokens, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return nil, errors.New(fmt.Sprintf("Could not log in with %s and %s : error code %d", *blackduckUsername, getPassword(), resp.StatusCode))
+		return nil, fmt.Errorf("Could not log in with %s and %s : error code %d", *blackduckUsername, getPassword(), resp.StatusCode)
 	}
 	for _, cookie := range resp.Cookies() {
 		if strings.Contains(cookie.String(), "JSESSIONID=") {
-			a.XCSRFToken = resp.Header.Get("X-CSRF-TOKEN")
 			a.Cookie = cookie
 			return &a, nil
 		}
@@ -253,7 +248,7 @@ func main() {
 	}
 
 	prometheus.MustRegister(NewExporter(*blackduckURL))
-	//prometheus.MustRegister(version.NewCollector("blackduck_exporter"))
+	prometheus.MustRegister(version.NewCollector("blackduck_exporter"))
 
 	http.Handle(*metricsEndpoint, prometheus.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
