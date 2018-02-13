@@ -133,9 +133,77 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	}
 	e.jobLastSeenRunning.Collect(ch)
 
+	scans, err := getScans(auth)
+	if err != nil {
+		return err
+	}
+	for _, key := range []string{
+		"IN_PROGRESS",
+		"UNSTARTED",
+	} {
+		e.scans.WithLabelValues(key).Set(0.0)
+	}
+	for _, scan := range scans.Items {
+		for _, status := range scan.Status {
+			if status.OperationNameCode == "ServerScanning" {
+				e.scans.WithLabelValues(status.Status).Inc()
+			}
+		}
+	}
 	e.scans.Collect(ch)
 
 	return nil
+}
+
+type scanJSON struct {
+	Items []struct {
+		Name   string `json:"name"`
+		Status []struct {
+			OperationNameCode string `json:"operationNameCode"`
+			Status            string `json:"status"`
+		} `json:"status"`
+	} `json:"items"`
+	TotalCount   int    `json:"totalCount"`
+	ErrorMessage string `json:"errorMessage"`
+}
+
+func getScans(auth *authTokens) (scanJSON, error) {
+	var j scanJSON
+	hc := http.Client{}
+
+	form := url.Values{}
+	form.Add("limit", "1000")
+	form.Add("offset", "0")
+	form.Add("sort", "updatedAt DESC")
+	form.Add("filter", "codeLocationStatus:in_progress")
+	form.Add("filter", "codeLocationStatus:in_progress")
+	req, err := http.NewRequest(
+		"GET",
+		fmt.Sprintf("%s/api/internal/codelocations?%s", *blackduckURL, form.Encode()),
+		nil)
+	if err != nil {
+		return j, err
+	}
+	req.AddCookie(auth.Cookie)
+
+	resp, err := hc.Do(req)
+	if err != nil {
+		return j, err
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return j, err
+	}
+
+	err = json.Unmarshal(body, &j)
+	if err != nil {
+		return j, err
+	}
+	if j.ErrorMessage != "" {
+		return j, fmt.Errorf("Problem fetching jobs: %s", j.ErrorMessage)
+	}
+	return j, nil
 }
 
 type jobJSON struct {
