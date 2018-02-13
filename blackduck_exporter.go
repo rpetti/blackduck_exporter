@@ -28,9 +28,7 @@ var (
 	blackduckUsername     = flag.String("blackduck.username", "", "BlackDuck username to use for API authentication")
 	blackduckPasswordFile = flag.String("blackduck.password.file", "", "File (secret) containing BlackDuck password")
 	blackduckPassword     = flag.String("blackduck.password", "", "BlackDuck password in plain text (blackduck.password.file is recommended instead)")
-	insecure              = flag.Bool("insecure", false, "Ignore certificate errors")
 	showVersion           = flag.Bool("version", false, "Print version information")
-	test                  = flag.Bool("test", false, "Test connection to Blackduck server and exit")
 )
 
 // Exporter : Exported metrics data
