@@ -115,6 +115,12 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 		jobStatusCounts[job.Status]++
 	}
+	for _, key := range []string{
+		"RUNNING",
+		"SCHEDULED",
+	} {
+		e.jobs.WithLabelValues(key).Set(0.0)
+	}
 	for key, count := range jobStatusCounts {
 		e.jobs.WithLabelValues(key).Set(float64(count))
 	}
