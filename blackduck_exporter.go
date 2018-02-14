@@ -118,6 +118,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	for _, key := range []string{
 		"RUNNING",
 		"SCHEDULED",
+		"DISPATCHED",
 	} {
 		e.jobs.WithLabelValues(key).Set(0.0)
 	}
