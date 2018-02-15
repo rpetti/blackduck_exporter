@@ -39,6 +39,7 @@ type Exporter struct {
 
 	scrapeFailures prometheus.Counter
 
+	jobsFailed         prometheus.Gauge
 	jobs               *prometheus.GaugeVec
 	scans              *prometheus.GaugeVec
 	jobLastSeenRunning *prometheus.GaugeVec
@@ -52,6 +53,11 @@ func NewExporter(uri string) *Exporter {
 			Namespace: namespace,
 			Name:      "exporter_scrape_failures_total",
 			Help:      "Number of errors while scraping blackduck.",
+		}),
+		jobsFailed: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "jobs_failed_total",
+			Help:      "Number of jobs that have ever failed.",
 		}),
 		jobs: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -80,6 +86,7 @@ func NewExporter(uri string) *Exporter {
 // Describe : Collector implementation for Prometheus
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	e.scrapeFailures.Describe(ch)
+	e.jobsFailed.Describe(ch)
 	e.jobs.Describe(ch)
 	e.scans.Describe(ch)
 	e.jobLastSeenRunning.Describe(ch)
@@ -133,6 +140,13 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 	}
 	e.jobLastSeenRunning.Collect(ch)
+
+	numFailedJobs, err := getNumJobsFailed(auth)
+	if err != nil {
+		return err
+	}
+	e.jobsFailed.Set(float64(numFailedJobs))
+	e.jobsFailed.Collect(ch)
 
 	scans, err := getScans(auth)
 	if err != nil {
@@ -255,6 +269,43 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 		return j, fmt.Errorf("Problem fetching jobs: %s", j.ErrorMessage)
 	}
 	return j, nil
+}
+
+func getNumJobsFailed(auth *authTokens) (int, error) {
+	var j jobJSON
+	hc := http.Client{}
+
+	form := url.Values{}
+	form.Add("limit", "1")
+	form.Add("offset", "0")
+	form.Add("filter", "jobStatus:failed")
+	req, err := http.NewRequest(
+		"GET",
+		fmt.Sprintf("%s/api/v1/jobs?%s", *blackduckURL, form.Encode()),
+		nil)
+	if err != nil {
+		return -1, err
+	}
+	req.AddCookie(auth.Cookie)
+
+	resp, err := hc.Do(req)
+	if err != nil {
+		return -1, err
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return -1, err
+	}
+
+	err = json.Unmarshal(body, &j)
+	if err != nil {
+		return -1, err
+	}
+	if j.ErrorMessage != "" {
+		return -1, fmt.Errorf("Problem fetching job error count: %s", j.ErrorMessage)
+	}
+	return j.TotalCount, nil
 }
 
 // getPassword : Returns the password from either the plain text string or the specified password file
