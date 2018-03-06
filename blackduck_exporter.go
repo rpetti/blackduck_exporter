@@ -78,7 +78,7 @@ func NewExporter(uri string) *Exporter {
 			Name:      "job_last_seen_running",
 			Help:      "Time of the jobs last seen running.",
 		},
-			[]string{"guid"},
+			[]string{"guid", "type"},
 		),
 	}
 }
@@ -136,7 +136,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 
 	for _, job := range jobs.Items {
 		if job.Status == "RUNNING" {
-			e.jobLastSeenRunning.WithLabelValues(job.ID).SetToCurrentTime()
+			e.jobLastSeenRunning.WithLabelValues(job.ID, job.JobSpec.Type).SetToCurrentTime()
 		}
 	}
 	e.jobLastSeenRunning.Collect(ch)
@@ -223,8 +223,11 @@ func getScans(auth *authTokens) (scanJSON, error) {
 
 type jobJSON struct {
 	Items []struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
+		ID      string `json:"id"`
+		Status  string `json:"status"`
+		JobSpec struct {
+			Type string `json:"jobType"`
+		} `json:"jobSpec"`
 	} `json:"items"`
 	TotalCount   int    `json:"totalCount"`
 	ErrorMessage string `json:"errorMessage"`
