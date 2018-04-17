@@ -357,7 +357,7 @@ func getAuthTokens() (*authTokens, error) {
 		return nil, fmt.Errorf("Could not log in with %s and %s : error code %d", *blackduckUsername, getPassword(), resp.StatusCode)
 	}
 	for _, cookie := range resp.Cookies() {
-		if strings.Contains(cookie.String(), "JSESSIONID=") {
+		if strings.Contains(cookie.String(), "JSESSIONID=") || strings.Contains(cookie.String(), "AUTHORIZATION_BEARER=") {
 			a.Cookie = cookie
 			return &a, nil
 		}
