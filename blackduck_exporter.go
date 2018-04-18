@@ -354,7 +354,7 @@ func getAuthTokens() (*authTokens, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("Could not log in with %s and %s : error code %d", *blackduckUsername, getPassword(), resp.StatusCode)
+		return nil, fmt.Errorf("Could not log in with user '%s' and provided password : error code %d", *blackduckUsername, resp.StatusCode)
 	}
 	for _, cookie := range resp.Cookies() {
 		if strings.Contains(cookie.String(), "JSESSIONID=") || strings.Contains(cookie.String(), "AUTHORIZATION_BEARER=") {
