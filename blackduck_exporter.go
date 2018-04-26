@@ -28,6 +28,7 @@ var (
 	blackduckUsername     = flag.String("blackduck.username", "", "BlackDuck username to use for API authentication")
 	blackduckPasswordFile = flag.String("blackduck.password.file", "", "File (secret) containing BlackDuck password")
 	blackduckPassword     = flag.String("blackduck.password", "", "BlackDuck password in plain text (blackduck.password.file is recommended instead)")
+	blackduckAPIToken     = flag.String("blackduck.api.token", "", "API token to use instead of username/password")
 	showVersion           = flag.Bool("version", false, "Print version information")
 )
 
@@ -199,7 +200,7 @@ func getScans(auth *authTokens) (scanJSON, error) {
 	if err != nil {
 		return j, err
 	}
-	req.AddCookie(auth.Cookie)
+	auth.Auth(req)
 
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -252,7 +253,7 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 	if err != nil {
 		return j, err
 	}
-	req.AddCookie(auth.Cookie)
+	auth.Auth(req)
 
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -289,7 +290,7 @@ func getNumJobsFailed(auth *authTokens) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	req.AddCookie(auth.Cookie)
+	auth.Auth(req)
 
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -328,11 +329,22 @@ func getPassword() string {
 }
 
 type authTokens struct {
-	Cookie *http.Cookie
+	Cookie      *http.Cookie
+	BearerToken string `json:"bearerToken"`
+}
+
+func getAuthTokens() (*authTokens, error) {
+	if *blackduckUsername != "" && getPassword() != "" {
+		return getAuthTokensBasic()
+	}
+	if *blackduckAPIToken != "" {
+		return getAuthTokensAPIKey()
+	}
+	return nil, fmt.Errorf("No authentication information available!")
 }
 
 // getCookie : Uses credentials to get cookie from BlackDuck
-func getAuthTokens() (*authTokens, error) {
+func getAuthTokensBasic() (*authTokens, error) {
 	var a authTokens
 	hc := http.Client{}
 
@@ -364,6 +376,44 @@ func getAuthTokens() (*authTokens, error) {
 	}
 	err = errors.New("Could not get cookie from blackduck using credentials provided")
 	return nil, err
+}
+
+func getAuthTokensAPIKey() (*authTokens, error) {
+	var a authTokens
+	hc := http.Client{}
+	req, err := http.NewRequest(
+		"POST",
+		fmt.Sprintf("%s/api/tokens/authenticate", *blackduckURL),
+		nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("token %s", *blackduckAPIToken))
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(body, &a)
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (a *authTokens) Auth(req *http.Request) {
+	if a.Cookie != nil {
+		req.AddCookie(a.Cookie)
+	}
+	if a.BearerToken != "" {
+		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.BearerToken))
+	}
 }
 
 func main() {
