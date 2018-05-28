@@ -13,8 +13,9 @@ import (
 	"strings"
 	"sync"
 
+	"log"
+
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
 )
 
@@ -107,10 +108,10 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	err := e.collect(ch)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		e.scrapeFailures.Inc()
-		e.scrapeFailures.Collect(ch)
 	}
+	e.scrapeFailures.Collect(ch)
 }
 
 func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
