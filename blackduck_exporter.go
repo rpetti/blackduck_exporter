@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 
@@ -44,6 +45,7 @@ type Exporter struct {
 	jobs               *prometheus.GaugeVec
 	scans              *prometheus.GaugeVec
 	jobLastSeenRunning *prometheus.GaugeVec
+	jobTypesRunning    *prometheus.GaugeVec
 }
 
 // NewExporter : Creates a new collector/exporter using a blackduck url
@@ -66,6 +68,13 @@ func NewExporter(uri string) *Exporter {
 			Help:      "Number of jobs currently in queue.",
 		},
 			[]string{"state"},
+		),
+		jobTypesRunning: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "job_types_running",
+			Help:      "Number of jobs currently running by type.",
+		},
+			[]string{"type"},
 		),
 		scans: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -91,6 +100,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	e.jobs.Describe(ch)
 	e.scans.Describe(ch)
 	e.jobLastSeenRunning.Describe(ch)
+	e.jobTypesRunning.Describe(ch)
 }
 
 // Collect : Collector implementation for Prometheus
@@ -134,6 +144,34 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		e.jobs.WithLabelValues(key).Set(float64(count))
 	}
 	e.jobs.Collect(ch)
+
+	jobTypeCounts := make(map[string]int)
+	supportedTypes := []string{
+		"BomVulnerabilityNotificationJob",
+		"KbProjectCacheUpdateJob",
+		"KbReleaseUpdateJob",
+		"KbVulnerabilityUpdateJob",
+		"KbVulnerabilityVdbUpdateJob",
+		"ReportingDatabaseTransferJob",
+		"ScanAutoBomJob",
+		"ScanPurgeJob",
+		"VersionReportJob",
+	}
+	for _, job := range jobs.Items {
+		if job.Status == "RUNNING" && sort.SearchStrings(supportedTypes, job.JobSpec.Type) < len(supportedTypes) {
+			if _, ok := jobTypeCounts[job.JobSpec.Type]; !ok {
+				jobTypeCounts[job.JobSpec.Type] = 0
+			}
+			jobTypeCounts[job.JobSpec.Type]++
+		}
+	}
+	for _, key := range supportedTypes {
+		e.jobTypesRunning.WithLabelValues(key).Set(0.0)
+	}
+	for key, count := range jobTypeCounts {
+		e.jobTypesRunning.WithLabelValues(key).Set(float64(count))
+	}
+	e.jobTypesRunning.Collect(ch)
 
 	for _, job := range jobs.Items {
 		if job.Status == "RUNNING" {
