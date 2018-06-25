@@ -157,9 +157,12 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		"ScanAutoBomJob",
 		"ScanPurgeJob",
 		"VersionReportJob",
+		"ProtexBomJob",
 	}
+	sort.Strings(supportedTypes)
 	for _, job := range jobs.Items {
-		if job.Status == "RUNNING" && sort.SearchStrings(supportedTypes, job.JobSpec.Type) < len(supportedTypes) {
+		i := sort.SearchStrings(supportedTypes, job.JobSpec.Type)
+		if job.Status == "RUNNING" && i < len(supportedTypes) && supportedTypes[i] == job.JobSpec.Type {
 			if _, ok := jobTypeCounts[job.JobSpec.Type]; !ok {
 				jobTypeCounts[job.JobSpec.Type] = 0
 			}
