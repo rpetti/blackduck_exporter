@@ -199,6 +199,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	for _, key := range []string{
 		"IN_PROGRESS",
 		"UNSTARTED",
+		"COMPLETED",
 	} {
 		e.scans.WithLabelValues(key).Set(0.0)
 	}
