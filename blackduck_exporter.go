@@ -14,8 +14,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/glog"
+	"log"
 
+	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/version"
 )
@@ -114,7 +115,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	err := e.collect(ch)
 	if err != nil {
-		glog.Error(err)
+		log.Printf("error collecting stats: %v", err)
 		e.scrapeFailures.Inc()
 	}
 	e.scrapeFailures.Collect(ch)
@@ -238,7 +239,7 @@ func getScans(auth *authTokens) (scanJSON, error) {
 	var j scanJSON
 
 	if *debug {
-		glog.Info("fetching scans")
+		log.Print("fetching scans")
 	}
 
 	form := url.Values{}
@@ -262,26 +263,26 @@ func getScans(auth *authTokens) (scanJSON, error) {
 	}
 
 	if *debug {
-		glog.Infof("scan response: %s", resp.Status)
+		log.Printf("scan response: %s", resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		glog.Errorf("could not read scan response body: %v", err)
+		log.Printf("could not read scan response body: %v", err)
 		return j, err
 	}
 
 	if *debug {
-		glog.Infof("scan response body: %s", body)
+		log.Printf("scan response body: %s", body)
 	}
 
 	err = json.Unmarshal(body, &j)
 	if err != nil {
-		glog.Errorf("could not get scans: %v", err)
+		log.Printf("could not get scans: %v", err)
 		return j, err
 	}
 	if j.ErrorMessage != "" {
-		glog.Errorf("server error when fetching scans: %s", j.ErrorMessage)
+		log.Printf("server error when fetching scans: %s", j.ErrorMessage)
 		return j, fmt.Errorf("Problem fetching jobs: %s", j.ErrorMessage)
 	}
 	return j, nil
@@ -303,7 +304,7 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 	var j jobJSON
 
 	if *debug {
-		glog.Info("fetching jobs")
+		log.Print("fetching jobs")
 	}
 
 	form := url.Values{}
@@ -329,26 +330,26 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 	}
 
 	if *debug {
-		glog.Infof("job response: %s", resp.Status)
+		log.Printf("job response: %s", resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		glog.Errorf("could not read job response body: %v", err)
+		log.Printf("could not read job response body: %v", err)
 		return j, err
 	}
 
 	if *debug {
-		glog.Infof("job response body: %s", body)
+		log.Printf("job response body: %s", body)
 	}
 
 	err = json.Unmarshal(body, &j)
 	if err != nil {
-		glog.Errorf("could not get jobs: %v", err)
+		log.Printf("could not get jobs: %v", err)
 		return j, err
 	}
 	if j.ErrorMessage != "" {
-		glog.Errorf("server error when fetching jobs: %s", j.ErrorMessage)
+		log.Printf("server error when fetching jobs: %s", j.ErrorMessage)
 		return j, fmt.Errorf("Problem fetching jobs: %s", j.ErrorMessage)
 	}
 	return j, nil
@@ -358,7 +359,7 @@ func getNumJobsFailed(auth *authTokens) (int, error) {
 	var j jobJSON
 
 	if *debug {
-		glog.Info("fetching job failed count")
+		log.Print("fetching job failed count")
 	}
 
 	form := url.Values{}
@@ -380,26 +381,26 @@ func getNumJobsFailed(auth *authTokens) (int, error) {
 	}
 
 	if *debug {
-		glog.Infof("job failed count response: %s", resp.Status)
+		log.Printf("job failed count response: %s", resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		glog.Errorf("could not read job failed count response body: %v", err)
+		log.Printf("could not read job failed count response body: %v", err)
 		return -1, err
 	}
 
 	if *debug {
-		glog.Infof("job failed count response body: %s", body)
+		log.Printf("job failed count response body: %s", body)
 	}
 
 	err = json.Unmarshal(body, &j)
 	if err != nil {
-		glog.Errorf("could not get job error count: %v", err)
+		log.Printf("could not get job error count: %v", err)
 		return -1, err
 	}
 	if j.ErrorMessage != "" {
-		glog.Errorf("server error when fetching job error count: %s", j.ErrorMessage)
+		log.Printf("server error when fetching job error count: %s", j.ErrorMessage)
 		return -1, fmt.Errorf("Problem fetching job error count: %s", j.ErrorMessage)
 	}
 	return j.TotalCount, nil
@@ -474,7 +475,7 @@ func getAuthTokensAPIKey() (*authTokens, error) {
 	var a authTokens
 
 	if *debug {
-		glog.Info("authenticating with api key")
+		log.Println("authenticating with api key")
 	}
 
 	req, err := http.NewRequest(
@@ -487,28 +488,28 @@ func getAuthTokensAPIKey() (*authTokens, error) {
 	req.Header.Add("Authorization", fmt.Sprintf("token %s", *blackduckAPIToken))
 	resp, err := hc.Do(req)
 	if err != nil {
-		glog.Errorf("could not authenticate: %v", err)
+		log.Printf("could not authenticate: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if *debug {
-		glog.Infof("auth request status: %s", resp.Status)
+		log.Printf("auth request status: %s", resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		glog.Errorf("could not read auth tokens: %v", err)
+		log.Printf("could not read auth tokens: %v", err)
 		return nil, err
 	}
 
 	if *debug {
-		glog.Infof("auth response body: %s", body)
+		log.Printf("auth response body: %s", body)
 	}
 
 	err = json.Unmarshal(body, &a)
 	if err != nil {
-		glog.Errorf("could not decode auth response json: %v", err)
+		log.Printf("could not decode auth response json: %v", err)
 		return nil, err
 	}
 	return &a, nil
