@@ -256,12 +256,7 @@ func getScans(auth *authTokens) (scanJSON, error) {
 		return j, err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return j, err
-	}
-
-	err = json.Unmarshal(body, &j)
+	err = json.NewDecoder(resp.Body).Decode(&j)
 	if err != nil {
 		glog.Errorf("could not get scans: %v", err)
 		return j, err
@@ -310,12 +305,7 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 		return j, err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return j, err
-	}
-
-	err = json.Unmarshal(body, &j)
+	err = json.NewDecoder(resp.Body).Decode(&j)
 	if err != nil {
 		glog.Errorf("could not get jobs: %v", err)
 		return j, err
@@ -348,12 +338,7 @@ func getNumJobsFailed(auth *authTokens) (int, error) {
 		return -1, err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return -1, err
-	}
-
-	err = json.Unmarshal(body, &j)
+	err = json.NewDecoder(resp.Body).Decode(&j)
 	if err != nil {
 		glog.Errorf("could not get job error count: %v", err)
 		return -1, err
