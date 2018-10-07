@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -31,7 +32,11 @@ var (
 	blackduckPasswordFile = flag.String("blackduck.password.file", "", "File (secret) containing BlackDuck password")
 	blackduckPassword     = flag.String("blackduck.password", "", "BlackDuck password in plain text (blackduck.password.file is recommended instead)")
 	blackduckAPIToken     = flag.String("blackduck.api.token", "", "API token to use instead of username/password")
+	insecure              = flag.Bool("insecure", false, "Don't validate ssl")
+	sslServerName         = flag.String("ssl.server.name", "", "Server Name of the Black Duck SSL cert")
 	showVersion           = flag.Bool("version", false, "Print version information")
+
+	hc *http.Client
 )
 
 // Exporter : Exported metrics data
@@ -230,7 +235,6 @@ type scanJSON struct {
 
 func getScans(auth *authTokens) (scanJSON, error) {
 	var j scanJSON
-	hc := http.Client{}
 
 	form := url.Values{}
 	form.Add("limit", "1000")
@@ -281,7 +285,6 @@ type jobJSON struct {
 
 func getJobs(auth *authTokens) (jobJSON, error) {
 	var j jobJSON
-	hc := http.Client{}
 
 	form := url.Values{}
 	form.Add("limit", "1000")
@@ -322,7 +325,6 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 
 func getNumJobsFailed(auth *authTokens) (int, error) {
 	var j jobJSON
-	hc := http.Client{}
 
 	form := url.Values{}
 	form.Add("limit", "1")
@@ -391,7 +393,6 @@ func getAuthTokens() (*authTokens, error) {
 // getCookie : Uses credentials to get cookie from BlackDuck
 func getAuthTokensBasic() (*authTokens, error) {
 	var a authTokens
-	hc := http.Client{}
 
 	form := url.Values{}
 	form.Add("j_username", *blackduckUsername)
@@ -425,7 +426,6 @@ func getAuthTokensBasic() (*authTokens, error) {
 
 func getAuthTokensAPIKey() (*authTokens, error) {
 	var a authTokens
-	hc := http.Client{}
 	req, err := http.NewRequest(
 		"POST",
 		fmt.Sprintf("%s/api/tokens/authenticate", *blackduckURL),
@@ -468,6 +468,17 @@ func main() {
 		fmt.Fprintln(os.Stdout, version.Print("blackduck_exporter"))
 		os.Exit(0)
 	}
+
+	tlsConfig := &tls.Config{InsecureSkipVerify: *insecure}
+	if *sslServerName != "" {
+		tlsConfig.ServerName = *sslServerName
+	}
+	hc = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = tlsConfig
 
 	prometheus.MustRegister(NewExporter(*blackduckURL))
 	prometheus.MustRegister(version.NewCollector("blackduck_exporter"))
