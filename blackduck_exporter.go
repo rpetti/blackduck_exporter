@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"log"
+	"github.com/golang/glog"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/version"
@@ -113,7 +113,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	err := e.collect(ch)
 	if err != nil {
-		log.Println(err)
+		glog.Error(err)
 		e.scrapeFailures.Inc()
 	}
 	e.scrapeFailures.Collect(ch)
@@ -263,9 +263,11 @@ func getScans(auth *authTokens) (scanJSON, error) {
 
 	err = json.Unmarshal(body, &j)
 	if err != nil {
+		glog.Errorf("could not get scans: %v", err)
 		return j, err
 	}
 	if j.ErrorMessage != "" {
+		glog.Errorf("server error when fetching scans: %s", j.ErrorMessage)
 		return j, fmt.Errorf("Problem fetching jobs: %s", j.ErrorMessage)
 	}
 	return j, nil
@@ -315,9 +317,11 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 
 	err = json.Unmarshal(body, &j)
 	if err != nil {
+		glog.Errorf("could not get jobs: %v", err)
 		return j, err
 	}
 	if j.ErrorMessage != "" {
+		glog.Errorf("server error when fetching jobs: %s", j.ErrorMessage)
 		return j, fmt.Errorf("Problem fetching jobs: %s", j.ErrorMessage)
 	}
 	return j, nil
@@ -351,9 +355,11 @@ func getNumJobsFailed(auth *authTokens) (int, error) {
 
 	err = json.Unmarshal(body, &j)
 	if err != nil {
+		glog.Errorf("could not get job error count: %v", err)
 		return -1, err
 	}
 	if j.ErrorMessage != "" {
+		glog.Errorf("server error when fetching job error count: %s", j.ErrorMessage)
 		return -1, fmt.Errorf("Problem fetching job error count: %s", j.ErrorMessage)
 	}
 	return j.TotalCount, nil
@@ -493,5 +499,5 @@ func main() {
 			</body>
 			</html>`))
 	})
-	log.Fatal(http.ListenAndServe(*listeningAddress, nil))
+	glog.Fatal(http.ListenAndServe(*listeningAddress, nil))
 }
