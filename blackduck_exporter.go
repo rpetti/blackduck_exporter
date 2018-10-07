@@ -35,6 +35,7 @@ var (
 	insecure              = flag.Bool("insecure", false, "Don't validate ssl")
 	sslServerName         = flag.String("ssl.server.name", "", "Server Name of the Black Duck SSL cert")
 	showVersion           = flag.Bool("version", false, "Print version information")
+	debug                 = flag.Bool("debug", false, "Print debugging information")
 
 	hc *http.Client
 )
@@ -236,6 +237,10 @@ type scanJSON struct {
 func getScans(auth *authTokens) (scanJSON, error) {
 	var j scanJSON
 
+	if *debug {
+		glog.Info("fetching scans")
+	}
+
 	form := url.Values{}
 	form.Add("limit", "1000")
 	form.Add("offset", "0")
@@ -256,7 +261,21 @@ func getScans(auth *authTokens) (scanJSON, error) {
 		return j, err
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(&j)
+	if *debug {
+		glog.Infof("scan response: %s", resp.Status)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		glog.Errorf("could not read scan response body: %v", err)
+		return j, err
+	}
+
+	if *debug {
+		glog.Infof("scan response body: %s", body)
+	}
+
+	err = json.Unmarshal(body, &j)
 	if err != nil {
 		glog.Errorf("could not get scans: %v", err)
 		return j, err
@@ -283,6 +302,10 @@ type jobJSON struct {
 func getJobs(auth *authTokens) (jobJSON, error) {
 	var j jobJSON
 
+	if *debug {
+		glog.Info("fetching jobs")
+	}
+
 	form := url.Values{}
 	form.Add("limit", "1000")
 	form.Add("offset", "0")
@@ -305,7 +328,21 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 		return j, err
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(&j)
+	if *debug {
+		glog.Infof("job response: %s", resp.Status)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		glog.Errorf("could not read job response body: %v", err)
+		return j, err
+	}
+
+	if *debug {
+		glog.Infof("job response body: %s", body)
+	}
+
+	err = json.Unmarshal(body, &j)
 	if err != nil {
 		glog.Errorf("could not get jobs: %v", err)
 		return j, err
@@ -319,6 +356,10 @@ func getJobs(auth *authTokens) (jobJSON, error) {
 
 func getNumJobsFailed(auth *authTokens) (int, error) {
 	var j jobJSON
+
+	if *debug {
+		glog.Info("fetching job failed count")
+	}
 
 	form := url.Values{}
 	form.Add("limit", "1")
@@ -338,7 +379,21 @@ func getNumJobsFailed(auth *authTokens) (int, error) {
 		return -1, err
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(&j)
+	if *debug {
+		glog.Infof("job failed count response: %s", resp.Status)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		glog.Errorf("could not read job failed count response body: %v", err)
+		return -1, err
+	}
+
+	if *debug {
+		glog.Infof("job failed count response body: %s", body)
+	}
+
+	err = json.Unmarshal(body, &j)
 	if err != nil {
 		glog.Errorf("could not get job error count: %v", err)
 		return -1, err
@@ -417,6 +472,11 @@ func getAuthTokensBasic() (*authTokens, error) {
 
 func getAuthTokensAPIKey() (*authTokens, error) {
 	var a authTokens
+
+	if *debug {
+		glog.Info("authenticating with api key")
+	}
+
 	req, err := http.NewRequest(
 		"POST",
 		fmt.Sprintf("%s/api/tokens/authenticate", *blackduckURL),
@@ -427,17 +487,28 @@ func getAuthTokensAPIKey() (*authTokens, error) {
 	req.Header.Add("Authorization", fmt.Sprintf("token %s", *blackduckAPIToken))
 	resp, err := hc.Do(req)
 	if err != nil {
+		glog.Errorf("could not authenticate: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	if *debug {
+		glog.Infof("auth request status: %s", resp.Status)
+	}
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		glog.Errorf("could not read auth tokens: %v", err)
 		return nil, err
+	}
+
+	if *debug {
+		glog.Infof("auth response body: %s", body)
 	}
 
 	err = json.Unmarshal(body, &a)
 	if err != nil {
+		glog.Errorf("could not decode auth response json: %v", err)
 		return nil, err
 	}
 	return &a, nil
