@@ -167,6 +167,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		"ProtexBomJob",
 		"HierarchicalVersionBomJob",
 		"VersionBomComputationJob",
+		"ScanGraphJob",
 	}
 	sort.Strings(supportedTypes)
 	for _, job := range jobs.Items {
