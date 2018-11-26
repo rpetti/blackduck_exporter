@@ -145,6 +145,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		"RUNNING",
 		"SCHEDULED",
 		"DISPATCHED",
+		"ERROR",
 	} {
 		e.jobs.WithLabelValues(key).Set(0.0)
 	}
