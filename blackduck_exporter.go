@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"log"
 
@@ -49,11 +50,13 @@ type Exporter struct {
 
 	scrapeFailures prometheus.Counter
 
-	jobsFailed         prometheus.Gauge
-	jobs               *prometheus.GaugeVec
-	scans              *prometheus.GaugeVec
-	jobLastSeenRunning *prometheus.GaugeVec
-	jobTypesRunning    *prometheus.GaugeVec
+	jobsFailed                   prometheus.Gauge
+	longestJobRunning            prometheus.Gauge
+	averageDurationOfRunningJobs prometheus.Gauge
+	jobs                         *prometheus.GaugeVec
+	scans                        *prometheus.GaugeVec
+	jobLastSeenRunning           *prometheus.GaugeVec
+	jobTypesRunning              *prometheus.GaugeVec
 }
 
 // NewExporter : Creates a new collector/exporter using a blackduck url
@@ -98,6 +101,16 @@ func NewExporter(uri string) *Exporter {
 		},
 			[]string{"guid", "type"},
 		),
+		longestJobRunning: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "longest_running_job_duration",
+			Help:      "Longest duration of currently running jobs",
+		}),
+		averageDurationOfRunningJobs: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "average_duration_of_running_jobs",
+			Help:      "Average duration of all currently running jobs",
+		}),
 	}
 }
 
@@ -109,6 +122,8 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	e.scans.Describe(ch)
 	e.jobLastSeenRunning.Describe(ch)
 	e.jobTypesRunning.Describe(ch)
+	e.averageDurationOfRunningJobs.Describe(ch)
+	e.longestJobRunning.Describe(ch)
 }
 
 // Collect : Collector implementation for Prometheus
@@ -194,6 +209,30 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 	}
 	e.jobLastSeenRunning.Collect(ch)
+
+	var highestDuration float64
+	var totalDuration float64
+	highestDuration = 0.0
+	totalDuration = 0.0
+	totalRunning := 0
+	for _, job := range jobs.Items {
+		if job.Status == "RUNNING" {
+			duration := time.Since(job.StartedAt.Time).Seconds()
+			if duration > highestDuration {
+				highestDuration = duration
+			}
+			totalDuration += duration
+			totalRunning += 1
+		}
+	}
+	var averageDuration float64
+	if totalRunning > 0 {
+		averageDuration = totalDuration / float64(totalRunning)
+	}
+	e.longestJobRunning.Set(highestDuration)
+	e.longestJobRunning.Collect(ch)
+	e.averageDurationOfRunningJobs.Set(averageDuration)
+	e.averageDurationOfRunningJobs.Collect(ch)
 
 	numFailedJobs, err := getNumJobsFailed(auth)
 	if err != nil {
@@ -290,6 +329,25 @@ func getScans(auth *authTokens) (scanJSON, error) {
 	return j, nil
 }
 
+type BDTime struct {
+	Time time.Time
+}
+
+const bdTimeLayout = "2006-01-02T15:04:05.999Z"
+
+var _ json.Unmarshaler = &BDTime{}
+
+func (bdt *BDTime) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), "\"")
+	if s == "null" {
+		bdt.Time = time.Time{}
+		return nil
+	}
+	t, err := time.Parse(bdTimeLayout, s)
+	bdt.Time = t
+	return err
+}
+
 type jobJSON struct {
 	Items []struct {
 		ID      string `json:"id"`
@@ -297,6 +355,7 @@ type jobJSON struct {
 		JobSpec struct {
 			Type string `json:"jobType"`
 		} `json:"jobSpec"`
+		StartedAt BDTime `json:"startedAt"`
 	} `json:"items"`
 	TotalCount   int    `json:"totalCount"`
 	ErrorMessage string `json:"errorMessage"`
