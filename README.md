@@ -1,4 +1,4 @@
-# BlackDuck Exporter
+# Black Duck Exporter
 
 This is a relatively simple Prometheus exporter for exposing job statistics.
 
