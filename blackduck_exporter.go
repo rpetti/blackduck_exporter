@@ -145,6 +145,11 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		return err
 	}
 
+	jobStats, err := getJobStats(auth)
+	if err != nil {
+		return err
+	}
+
 	jobs, err := getJobs(auth)
 	if err != nil {
 		return err
@@ -170,21 +175,12 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	e.jobs.Collect(ch)
 
 	jobTypeCounts := make(map[string]int)
-	supportedTypes := []string{
-		"BomVulnerabilityNotificationJob",
-		"KbProjectCacheUpdateJob",
-		"KbReleaseUpdateJob",
-		"KbVulnerabilityUpdateJob",
-		"KbVulnerabilityVdbUpdateJob",
-		"ReportingDatabaseTransferJob",
-		"ScanAutoBomJob",
-		"ScanPurgeJob",
-		"VersionReportJob",
-		"ProtexBomJob",
-		"HierarchicalVersionBomJob",
-		"VersionBomComputationJob",
-		"ScanGraphJob",
+
+	var supportedTypes []string
+	for _, item := range jobStats.Items {
+		supportedTypes = append(supportedTypes, item.JobType)
 	}
+
 	sort.Strings(supportedTypes)
 	for _, job := range jobs.Items {
 		i := sort.SearchStrings(supportedTypes, job.JobSpec.Type)
@@ -234,10 +230,8 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	e.averageDurationOfRunningJobs.Set(averageDuration)
 	e.averageDurationOfRunningJobs.Collect(ch)
 
-	numFailedJobs, err := getNumJobsFailed(auth)
-	if err != nil {
-		return err
-	}
+	numFailedJobs := jobStats.TotalFailures()
+
 	e.jobsFailed.Set(float64(numFailedJobs))
 	e.jobsFailed.Collect(ch)
 
@@ -346,6 +340,75 @@ func (bdt *BDTime) UnmarshalJSON(b []byte) error {
 	t, err := time.Parse(bdTimeLayout, s)
 	bdt.Time = t
 	return err
+}
+
+type jobStatsJSON struct {
+	Items []struct {
+		JobType         string `json:"jobType"`
+		TotalFailures   int    `json:"totalFailures"`
+		TotalInProgress int    `json:"totalInProgress"`
+		TotalRuns       int    `json:"totalRuns"`
+		TotalSuccesses  int    `json:"totalSuccesses`
+	} `json:"items"`
+	ErrorMessage string `json:"errorMessage"`
+}
+
+func (stats jobStatsJSON) TotalFailures() int {
+	failures := 0
+	for _, item := range stats.Items {
+		failures += item.TotalFailures
+	}
+	return failures
+}
+
+func getJobStats(auth *authTokens) (jobStatsJSON, error) {
+	var j jobStatsJSON
+
+	if *debug {
+		log.Print("fetching job stats")
+	}
+
+	form := url.Values{}
+	form.Add("limit", "1000")
+	form.Add("sortField", "jobType")
+	req, err := http.NewRequest(
+		"GET",
+		fmt.Sprintf("%s/api/job-statistics?%s", *blackduckURL, form.Encode()),
+		nil)
+	if err != nil {
+		return j, err
+	}
+	auth.Auth(req)
+
+	resp, err := hc.Do(req)
+	if err != nil {
+		return j, err
+	}
+
+	if *debug {
+		log.Printf("job stats response: %s", resp.Status)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("could not read job stats response body: %v", err)
+		return j, err
+	}
+
+	if *debug {
+		log.Printf("job stats response body: %s", body)
+	}
+
+	err = json.Unmarshal(body, &j)
+	if err != nil {
+		log.Printf("could not get job stats: %v", err)
+		return j, err
+	}
+	if j.ErrorMessage != "" {
+		log.Printf("server error when fetching job stats: %s", j.ErrorMessage)
+		return j, fmt.Errorf("Problem fetching job stats: %s", j.ErrorMessage)
+	}
+	return j, nil
 }
 
 type jobJSON struct {
