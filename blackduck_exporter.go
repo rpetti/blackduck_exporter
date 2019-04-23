@@ -57,6 +57,7 @@ type Exporter struct {
 	scans                        *prometheus.GaugeVec
 	jobLastSeenRunning           *prometheus.GaugeVec
 	jobTypesRunning              *prometheus.GaugeVec
+	scrapeTime                   prometheus.Gauge
 }
 
 // NewExporter : Creates a new collector/exporter using a blackduck url
@@ -111,6 +112,11 @@ func NewExporter(uri string) *Exporter {
 			Name:      "average_duration_of_running_jobs",
 			Help:      "Average duration of all currently running jobs",
 		}),
+		scrapeTime: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "scrape_duration_seconds",
+			Help:      "Time taken in seconds to scrape metrics from Black Duck.",
+		}),
 	}
 }
 
@@ -137,6 +143,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
+	start := time.Now()
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 
@@ -255,6 +262,9 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	}
 	e.scans.Collect(ch)
 
+	elapsed := time.Now().Sub(start)
+	e.scrapeTime.Set(elapsed.Seconds())
+	e.scrapeTime.Collect(ch)
 	return nil
 }
 
