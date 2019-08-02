@@ -295,7 +295,7 @@ func getScans(auth *authTokens) (scanJSON, error) {
 	form.Add("filter", "codeLocationStatus:in_progress")
 	req, err := http.NewRequest(
 		"GET",
-		fmt.Sprintf("%s/api/internal/codelocations?%s", *blackduckURL, form.Encode()),
+		fmt.Sprintf("%s/api/codelocations?%s", *blackduckURL, form.Encode()),
 		nil)
 	if err != nil {
 		return j, err
@@ -328,7 +328,7 @@ func getScans(auth *authTokens) (scanJSON, error) {
 	}
 	if j.ErrorMessage != "" {
 		log.Printf("server error when fetching scans: %s", j.ErrorMessage)
-		return j, fmt.Errorf("Problem fetching jobs: %s", j.ErrorMessage)
+		return j, fmt.Errorf("Problem fetching scans: %s", j.ErrorMessage)
 	}
 	return j, nil
 }
