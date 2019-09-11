@@ -251,6 +251,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		"IN_PROGRESS",
 		"UNSTARTED",
 		"COMPLETED",
+		"ERROR",
 	} {
 		e.scans.WithLabelValues(key).Set(0.0)
 	}
